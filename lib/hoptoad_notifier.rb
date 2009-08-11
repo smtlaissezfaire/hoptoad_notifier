@@ -1,7 +1,10 @@
+$LOAD_PATH << File.join(File.dirname(File.dirname(__FILE__)), "vendor", "builder", "lib")
 require 'net/http'
 require 'net/https'
 require 'rubygems'
+require 'builder'
 require 'active_support'
+require 'lib/hoptoad_notifier/notice'
 
 # Plugin for applications to automatically post errors to the Hoptoad of their choice.
 module HoptoadNotifier
@@ -18,13 +21,15 @@ module HoptoadNotifier
 
   IGNORE_USER_AGENT_DEFAULT = []
 
-  VERSION = "1.2.4"
+  VERSION    = "2.0.0"
+  NAME       = "Hoptoad Notifier"
+  URL        = "http://hoptoadapp.com"
   LOG_PREFIX = "** [Hoptoad] "
 
   HEADERS = {
     'Content-type'             => 'application/x-yaml',
     'Accept'                   => 'text/xml, application/xml',
-    'X-Hoptoad-Client-Name'    => 'Hoptoad Notifier',
+    'X-Hoptoad-Client-Name'    => NAME,
     'X-Hoptoad-Client-Version' => VERSION
   }
 
