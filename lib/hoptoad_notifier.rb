@@ -3,6 +3,7 @@ require 'net/https'
 require 'rubygems'
 require 'active_support'
 require 'hoptoad_notifier/notice'
+require 'hoptoad_notifier/submitter'
 
 # Plugin for applications to automatically post errors to the Hoptoad of their choice.
 module HoptoadNotifier
@@ -68,6 +69,11 @@ module HoptoadNotifier
     # The host to connect to.
     def host
       @host ||= 'hoptoadapp.com'
+    end
+
+    # The path of the API endpoint.
+    def path
+      @path ||= "api/v2/notices"
     end
 
     # The HTTP open timeout (defaults to 2 seconds).
@@ -146,6 +152,12 @@ module HoptoadNotifier
       end
     end
 
+    def log(level, message, response = nil)
+      logger.send level, LOG_PREFIX + message if logger
+      report_environment_info
+      report_response_body(response.body) if response && response.respond_to?(:body)
+    end
+
     # Call this method to modify defaults in your initializers.
     #
     # HoptoadNotifier.configure do |config|
@@ -168,7 +180,7 @@ module HoptoadNotifier
     end
 
     def url #:nodoc:
-      URI.parse("#{protocol}://#{host}:#{port}/notices/")
+      URI.parse("#{protocol}://#{host}:#{port}/#{path}/")
     end
 
     def default_notice_options #:nodoc:
@@ -202,8 +214,7 @@ module HoptoadNotifier
       filter_backtrace do |line|
         if HoptoadNotifier.project_root
           line.gsub(/^#{HoptoadNotifier.project_root}/, "[PROJECT_ROOT]")
-        else
-          line
+
         end
       end
 
