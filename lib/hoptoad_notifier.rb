@@ -2,6 +2,7 @@ require 'net/http'
 require 'net/https'
 require 'rubygems'
 require 'active_support'
+require 'hoptoad_notifier/notice'
 
 # Plugin for applications to automatically post errors to the Hoptoad of their choice.
 module HoptoadNotifier
@@ -18,8 +19,11 @@ module HoptoadNotifier
 
   IGNORE_USER_AGENT_DEFAULT = []
 
-  VERSION = "1.2.4"
   LOG_PREFIX = "** [Hoptoad] "
+
+  NAME = "Hoptoad Notifier"
+  VERSION = "2.0.0"
+  URL = "http://hoptoadapp.com"
 
   HEADERS = {
     'Content-type'             => 'application/x-yaml',

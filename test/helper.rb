@@ -12,6 +12,8 @@ require 'active_record'
 require 'active_record/base'
 require 'active_support'
 
+require 'nokogiri'
+
 require File.join(File.dirname(__FILE__), "..", "lib", "hoptoad_notifier")
 
 RAILS_ROOT = File.join( File.dirname(__FILE__), "rails_root" )
