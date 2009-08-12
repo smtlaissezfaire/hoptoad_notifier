@@ -140,18 +140,113 @@ class NoticeTest < Test::Unit::TestCase
     end
   end
 
-  should "clean up params" do
-    # set a param that will be cleaned
-    # assert that it is not present
+  #TODO move tests for nested classes (e.g. Notice::Request) into their own test files
+  should "clean up params when param filters are specified" do
+    HoptoadNotifier.params_filters << "snakes"
+    @request = HoptoadNotifier::Notice::Request.new
+    @request.params = { "id" => "1",
+                        "snakes" => "secret",
+                        "nested_param" => { "nested_id" => "2", "snakes" => "secret" } }
+
+    assert_equal "[FILTERED]", @request.params["snakes"]
+    assert_equal "[FILTERED]", @request.params["nested_param"]["snakes"]
+
+    assert_equal "1",          @request.params["id"]
+    assert_equal "2",          @request.params["nested_param"]["nested_id"]
   end
 
-  should "clean up environment" do
-    # set an environment var that will be cleaned
-    # assert that it is not present
+  should "filter password and password_confirmation params by default" do
+    @request = HoptoadNotifier::Notice::Request.new
+    @request.params = { "password" => "password",
+                        "password_confirmation" => "omgnotthesame" }
+
+    assert_equal "[FILTERED]", @request.params["password"]
+    assert_equal "[FILTERED]", @request.params["password_confirmation"]
   end
 
-  should "filter the backtrace" do
-    # set a backtrace with a line that will be cleaned
-    # assert that it is not present
+  should "clean up environment variables when environment filters are specified" do
+    HoptoadNotifier.environment_filters << "snakes"
+    @env = HoptoadNotifier::Notice::ServerEnvironment.new
+    @env.vars = { "PATH" => "/usr/bin:.",
+                  "snakes" => "secret",
+                  "nested_env" => { "nested_PATH" => "~/bin", "snakes" => "secret" } }
+
+    assert_equal "[FILTERED]", @env.vars["snakes"]
+    assert_equal "[FILTERED]", @env.vars["nested_env"]["snakes"]
+
+    assert_equal "/usr/bin:.", @env.vars["PATH"]
+    assert_equal "~/bin",      @env.vars["nested_env"]["nested_PATH"]
+  end
+
+  context "when backtrace filters are specified" do
+    setup do
+      HoptoadNotifier.filter_backtrace do |line|
+        line.gsub("get_exception", "some_method")
+      end
+    end
+
+    teardown{ HoptoadNotifier.add_default_filters }
+
+    should "clean up the backtrace" do
+      @notice = HoptoadNotifier::Notice.new
+      @notice.error.backtrace = get_exception("OMG").backtrace
+      assert_equal 'some_method', @notice.error.backtrace.first.method
+    end
+  end
+
+  context "with default filters" do
+    setup do
+      HoptoadNotifier.add_default_filters
+    end
+
+    teardown do
+      HoptoadNotifier.project_root = nil
+      HoptoadNotifier.add_default_filters
+    end
+
+    should "filter project-root backtrace lines by default if project-root is specified" do
+      HoptoadNotifier.project_root = File.dirname(__FILE__)
+      @notice = HoptoadNotifier::Notice.new
+      @notice.error.backtrace = get_exception("OMG").backtrace
+      assert_equal "[PROJECT_ROOT]/notice_test.rb", @notice.error.backtrace.first.file
+    end
+
+    should "not filter project-root backtrace lines by default if project-root is not specified" do
+      @notice = HoptoadNotifier::Notice.new
+      @notice.error.backtrace = get_exception("OMG").backtrace
+      assert_equal "test/notice_test.rb", @notice.error.backtrace.first.file
+    end
+
+    should "filter GEM_ROOT backtrace lines by default" do
+      Gem.stubs(:path).returns(["/Library/Ruby/Gems/1.8"])
+      fake_backtrace = ["/Library/Ruby/Gems/1.8/thoughtbot-paperclip/lib/paperclip.rb:1234"]
+      @notice = HoptoadNotifier::Notice.new
+      @notice.error.backtrace = fake_backtrace
+      assert_equal "[GEM_ROOT]/thoughtbot-paperclip/lib/paperclip.rb",
+                   @notice.error.backtrace.first.file
+    end
+
+    should "filter Hoptoad Notifier backtrace lines by default" do
+      fake_backtrace = ["/my_model.rb:1234",
+                        "/lib/hoptoad_notifier/stuff.rb:111",
+                        "another_class.rb:1"]
+
+      @notice = HoptoadNotifier::Notice.new
+      @notice.error.backtrace = fake_backtrace
+
+      assert_equal ["/my_model.rb:1234", "another_class.rb:1"],
+                   @notice.error.backtrace.map{|line| line.to_s }
+    end
+
+    should "filter lines that start with ./ from the backtrace by default" do
+      fake_backtrace = ["./my_model.rb:1234",
+                        "./another_class.rb:1"]
+
+      @notice = HoptoadNotifier::Notice.new
+      @notice.error.backtrace = fake_backtrace
+
+      assert_equal ["my_model.rb:1234", "another_class.rb:1"],
+                   @notice.error.backtrace.map{|line| line.to_s }
+    end
   end
 end

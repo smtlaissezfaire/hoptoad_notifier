@@ -4,17 +4,43 @@ module HoptoadNotifier
     attr_reader :notifier, :api_key, :error, :request, :server_environment
 
     class Notifier < Struct.new(:name, :version, :url); end
-    class Line     < Struct.new(:file, :number, :method); end
-    class Error    < Struct.new(:class, :message, :backtrace)
+
+    class Line < Struct.new(:file, :number, :method)
+      def to_s
+        "#{file}:#{number}#{": in `#{method}'" if method}"
+      end
+    end
+   
+    class Error < Struct.new(:class, :message, :backtrace)
       def backtrace=(backtrace)
-        super(parse_backtrace(backtrace))
+        super(parse(filter(backtrace)))
       end
 
       BACKTRACE_LINE = %r{^([^:]+):(\d+)(?::in `([^']+)')?$}.freeze
-      def parse_backtrace(backtrace)
+      def parse(backtrace)
         backtrace.map do |line|
           _, file, number, methodname = line.match(BACKTRACE_LINE).to_a
           Line.new(file, number, methodname)
+        end
+      end
+
+      def filter(backtrace)
+        backtrace.map do |line|
+          HoptoadNotifier.backtrace_filters.inject(line) do |mod_line, proc|
+            proc.call(mod_line)
+          end
+        end.compact
+      end
+    end
+
+    module Filterable
+      def filter hash, filters #:nodoc:
+        hash.each do |k, v|
+          hash[k] = "[FILTERED]" if filters.any? do |filter|
+            k.to_s.match(/#{filter}/)
+          end
+
+          hash[k] = filter(v, filters) if v.is_a?(Hash)
         end
       end
     end
@@ -28,11 +54,23 @@ module HoptoadNotifier
                      cgi_data = nil)
         super(controller, action, url, params || {}, session || {}, cgi_data || {})
       end
+
+      include Filterable
+        
+      def params
+        filter(super, HoptoadNotifier.params_filters)
+      end
     end
 
     class ServerEnvironment < Struct.new(:project_root, :environment_name, :vars)
       def initialize(project_root = nil, environment_name = nil, vars = nil)
         super(project_root, environment_name, vars || {})
+      end
+
+      include Filterable
+        
+      def vars
+        filter(super, HoptoadNotifier.environment_filters)
       end
     end
 
@@ -53,7 +91,6 @@ module HoptoadNotifier
     end
 
     def to_xml
-    #   clean!
       builder = Builder::XmlMarkup.new
       builder.instruct!
       xml = builder.notice(:version => HoptoadNotifier::VERSION) do |notice| 
@@ -123,19 +160,6 @@ module HoptoadNotifier
     end
 
     def clean_backtrace
-      error_backtrace.each do |line|
-        line['file'] = HoptoadNotifier.backtrace_filters.inject(line['file']) do |file, proc|
-          proc.call(file)
-        end
-      end
-    end
-
-    def clean_hash hash, filters #:nodoc:
-      hash.each do |k, v|
-        hash[k] = "[FILTERED]" if filters.any? do |filter|
-          k.to_s.match(/#{filter}/)
-        end
-      end
     end
 
     def clean_non_serializable_data(data) #:nodoc:

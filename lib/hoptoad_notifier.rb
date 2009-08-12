@@ -34,7 +34,7 @@ module HoptoadNotifier
 
   class << self
     attr_accessor :host, :port, :secure, :api_key, :http_open_timeout, :http_read_timeout,
-                  :proxy_host, :proxy_port, :proxy_user, :proxy_pass, :output
+                  :proxy_host, :proxy_port, :proxy_user, :proxy_pass, :output, :project_root
 
     def backtrace_filters
       @backtrace_filters ||= []
@@ -200,7 +200,11 @@ module HoptoadNotifier
       self.backtrace_filters.clear
 
       filter_backtrace do |line|
-        line.gsub(/#{RAILS_ROOT}/, "[RAILS_ROOT]")
+        if HoptoadNotifier.project_root
+          line.gsub(/^#{HoptoadNotifier.project_root}/, "[PROJECT_ROOT]")
+        else
+          line
+        end
       end
 
       filter_backtrace do |line|
@@ -212,11 +216,13 @@ module HoptoadNotifier
           Gem.path.inject(line) do |line, path|
             line.gsub(/#{path}/, "[GEM_ROOT]")
           end
+        else
+          line
         end
       end
 
       filter_backtrace do |line|
-        line if line !~ /lib\/#{File.basename(__FILE__)}/
+        line if line !~ /hoptoad_notifier/
       end
     end
   end
